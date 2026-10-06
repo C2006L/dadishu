@@ -70,6 +70,7 @@ public class UIThemeController : MonoBehaviour
         foreach (Text text in GetComponentsInChildren<Text>(true))
         {
             text.font = chineseFont;
+            text.fontStyle = FontStyle.Bold;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
         }

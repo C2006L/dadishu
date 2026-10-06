@@ -18,7 +18,10 @@ public static class HitFeedback
         obj.transform.position = position;
         TextMesh text = obj.AddComponent<TextMesh>();
         text.text = label;
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.font = Resources.Load<Font>("Fonts/NotoSansSC-VF");
+        if (text.font == null)
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.fontStyle = FontStyle.Bold;
         text.fontSize = 72;
         text.characterSize = 0.055f;
         text.anchor = TextAnchor.MiddleCenter;

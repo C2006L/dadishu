@@ -442,13 +442,14 @@ public class GardenMenuController : MonoBehaviour
         foreach (Text text in GetComponentsInChildren<Text>(true))
         {
             text.font = font;
-            text.fontStyle = FontStyle.Normal;
+            // 统一粗体，确保旧场景文本也符合木牌式休闲游戏风格。
+            text.fontStyle = FontStyle.Bold;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
         }
     }
 
-    private Text Text(Transform parent, string name, string value, int size, Color color, FontStyle style = FontStyle.Normal)
+    private Text Text(Transform parent, string name, string value, int size, Color color, FontStyle style = FontStyle.Bold)
     {
         GameObject obj = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text)); obj.transform.SetParent(parent, false);
         Text text = obj.GetComponent<Text>(); text.font = font; text.text = value; text.fontSize = size; text.fontStyle = style; text.color = color; text.alignment = TextAnchor.MiddleCenter; text.raycastTarget = false;
