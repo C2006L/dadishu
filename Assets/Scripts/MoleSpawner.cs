@@ -8,8 +8,7 @@ public class MoleSpawner : MonoBehaviour
     {
         public readonly int Id;
         public int Remaining;
-        public int ScoringTargets;
-        public int ScoringHits;
+        public int HitCount;
 
         public WaveState(int id) { Id = id; }
         public bool IsComplete => Remaining <= 0;
@@ -98,7 +97,6 @@ public class MoleSpawner : MonoBehaviour
                 if (globalIndex >= 0) usedColumns.Add(globalIndex % 3);
                 available.RemoveAt(pick);
                 MoleType type = waveTypes[i];
-                if (type != MoleType.Bomb) wave.ScoringTargets++;
                 float lifetime = Mathf.Lerp(startLifetime, endLifetime, gameManager.Progress01);
                 mole.Show(type, lifetime, wave.Id);
                 activeMoles.Add(mole);
@@ -176,8 +174,10 @@ public class MoleSpawner : MonoBehaviour
     public void NotifyMoleHit(Mole mole, int waveId, MoleType type)
     {
         WaveState wave = currentWave;
-        if (wave == null || wave.Id != waveId || type == MoleType.Bomb) return;
-        wave.ScoringHits++;
+        if (wave == null || wave.Id != waveId) return;
+        // “整批逃脱”只描述这一批是否完全没有被点击。炸弹鼠仍属于本批成员；
+        // 点击炸弹造成的断连由 GameManager 立即处理，不能再把同批其余地鼠误报为整批逃脱。
+        wave.HitCount++;
     }
 
     public void NotifyMoleResolved(Mole mole, int waveId)
@@ -198,7 +198,8 @@ public class MoleSpawner : MonoBehaviour
 
     private void ResolveWaveCombo(WaveState wave)
     {
-        if (wave != null && wave.ScoringTargets > 0 && wave.ScoringHits == 0)
+        // 无论本批有 1、2 还是 3 只，只有所有成员均自然逃脱时才断连击。
+        if (wave != null && wave.HitCount == 0)
             gameManager.RegisterWaveMissed();
     }
 

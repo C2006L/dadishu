@@ -20,7 +20,7 @@ public class Mole : MonoBehaviour
     private Sprite normalSprite;
     private Sprite rewardSprite;
     private Sprite bombSprite;
-    private Vector3 shownScale, shownPosition, hiddenPosition;
+    private Vector3 shownScale, activeShownScale, shownPosition, hiddenPosition;
     private bool isHit, isVisible;
     private MoleType type;
     private int waveId;
@@ -43,6 +43,7 @@ public class Mole : MonoBehaviour
         spriteRenderer.sortingOrder = 2;
         normalSprite = spriteRenderer.sprite;
         shownScale = transform.localScale;
+        activeShownScale = shownScale;
         // 兼容旧场景中序列化的偏高数值，限制最高位置，防止下排地鼠顶进上一排土堆。
         shownHeightOffset = Mathf.Min(shownHeightOffset, -0.06f);
         shownPosition = transform.localPosition + Vector3.up * shownHeightOffset;
@@ -63,6 +64,7 @@ public class Mole : MonoBehaviour
         type = newType;
         waveId = newWaveId;
         ApplyTypeSprite();
+        activeShownScale = shownScale * GetVisualScale(type);
         SyncHitCollider();
         isHit = false;
         isVisible = true;
@@ -71,13 +73,13 @@ public class Mole : MonoBehaviour
         // 碰撞器跟随地鼠从洞内上升；地鼠进入可见区域后即可命中，不再丢失快速点击。
         hitCollider.enabled = true;
         transform.localPosition = hiddenPosition;
-        transform.localScale = shownScale * 0.88f;
+        transform.localScale = activeShownScale * 0.88f;
         lifeRoutine = StartCoroutine(LifeRoutine(visibleTime));
     }
 
     private IEnumerator LifeRoutine(float visibleTime)
     {
-        yield return MoveAndScaleRoutine(hiddenPosition, shownPosition, shownScale * 0.88f, shownScale,
+        yield return MoveAndScaleRoutine(hiddenPosition, shownPosition, activeShownScale * 0.88f, activeShownScale,
             popDuration, 0f, 1f);
         if (!isVisible || isHit) yield break;
         yield return new WaitForSeconds(Mathf.Max(0.1f, visibleTime - popDuration - hideDuration));
@@ -101,6 +103,7 @@ public class Mole : MonoBehaviour
         lifeRoutine = null;
         isVisible = false;
         isHit = false;
+        activeShownScale = shownScale;
         transform.localScale = shownScale == Vector3.zero ? transform.localScale : shownScale;
         transform.localPosition = hiddenPosition;
         if (spriteRenderer != null) { spriteRenderer.enabled = false; spriteRenderer.color = Color.white; }
@@ -126,11 +129,12 @@ public class Mole : MonoBehaviour
     private IEnumerator HitRoutine()
     {
         spriteRenderer.color = type == MoleType.Bomb ? new Color(1f, 0.35f, 0.28f, 1f) : hitColor;
-        Vector3 pressedScale = new Vector3(shownScale.x * 1.04f, shownScale.y * 0.94f, shownScale.z);
+        Vector3 pressedScale = new Vector3(activeShownScale.x * 1.04f, activeShownScale.y * 0.94f,
+            activeShownScale.z);
         Vector3 pressedPosition = transform.localPosition + Vector3.down * 0.06f;
         yield return MoveAndScaleRoutine(transform.localPosition, pressedPosition, transform.localScale, pressedScale,
             0.08f, 1f, 1f);
-        yield return MoveAndScaleRoutine(pressedPosition, hiddenPosition, pressedScale, shownScale * 0.88f,
+        yield return MoveAndScaleRoutine(pressedPosition, hiddenPosition, pressedScale, activeShownScale * 0.88f,
             hideDuration, 1f, 1f);
         SetHidden();
         spawner?.NotifyMoleResolved(this, waveId);
@@ -139,7 +143,7 @@ public class Mole : MonoBehaviour
     private IEnumerator HideRoutine()
     {
         yield return MoveAndScaleRoutine(transform.localPosition, hiddenPosition, transform.localScale,
-            shownScale * 0.88f, hideDuration, spriteRenderer.color.a, 0f);
+            activeShownScale * 0.88f, hideDuration, spriteRenderer.color.a, 0f);
         SetHidden();
     }
 
@@ -165,6 +169,18 @@ public class Mole : MonoBehaviour
         // 点击区域覆盖头部和身体，但不延伸到透明边缘、皇冠火花或炸弹引线。
         boxCollider.size = new Vector2(spriteSize.x * 0.88f, spriteSize.y * 0.66f);
         boxCollider.offset = new Vector2(0f, spriteSize.y * 0.14f);
+    }
+
+    private static float GetVisualScale(MoleType spriteType)
+    {
+        // 三张素材的画布相同，但非透明主体面积不同。这里按主体面积做轻量归一化，
+        // 保留皇冠、炸弹等轮廓差异，同时避免奖励鼠明显偏大、炸弹鼠明显偏小。
+        switch (spriteType)
+        {
+            case MoleType.Reward: return 0.956f;
+            case MoleType.Bomb: return 1.022f;
+            default: return 1f;
+        }
     }
 
     private Sprite LoadRuntimeSprite(string path, string name, MoleType spriteType)
@@ -213,7 +229,7 @@ public class Mole : MonoBehaviour
         lifeRoutine = null;
         spriteRenderer.enabled = false;
         spriteRenderer.color = Color.white;
-        transform.localScale = shownScale;
+        transform.localScale = activeShownScale;
         transform.localPosition = hiddenPosition;
     }
 
