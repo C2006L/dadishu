@@ -14,6 +14,7 @@ public class MoleSpawner : MonoBehaviour
     private int minWave = 1, maxWave = 1;
     private float doubleWaveChance, rewardChance;
     private int lastIndex = -1;
+    private int waveScoringTargets, waveScoringHits;
     private bool gridReady;
 
     public void SetDifficulty(GameManager.GameDifficulty value)
@@ -73,6 +74,8 @@ public class MoleSpawner : MonoBehaviour
             List<Mole> available = GetAvailableMoles();
             desired = Mathf.Min(desired, available.Count);
             MoleType[] waveTypes = BuildWaveTypes(desired);
+            waveScoringTargets = 0;
+            waveScoringHits = 0;
             HashSet<int> usedColumns = new HashSet<int>();
             for (int i = 0; i < desired; i++)
             {
@@ -82,6 +85,7 @@ public class MoleSpawner : MonoBehaviour
                 if (globalIndex >= 0) usedColumns.Add(globalIndex % 3);
                 available.RemoveAt(pick);
                 MoleType type = waveTypes[i];
+                if (type != MoleType.Bomb) waveScoringTargets++;
                 float lifetime = Mathf.Lerp(startLifetime, endLifetime, gameManager.Progress01);
                 mole.Show(type, lifetime);
                 activeMoles.Add(mole);
@@ -94,6 +98,9 @@ public class MoleSpawner : MonoBehaviour
                 if (activeMoles.Count > 0) yield return null;
             }
             if (!gameManager.IsRoundActive) break;
+
+            // 连击按整批结算：多目标波次只要命中任意一只得分地鼠，就不因其余地鼠逃脱而断连。
+            ResolveWaveCombo();
 
             float emptyGap = Mathf.Lerp(startEmptyGap, endEmptyGap, gameManager.Progress01);
             yield return new WaitForSeconds(emptyGap);
@@ -159,7 +166,13 @@ public class MoleSpawner : MonoBehaviour
     public void NotifyMoleFinished(Mole mole, bool wasHit, MoleType type)
     {
         activeMoles.Remove(mole);
-        if (!wasHit) gameManager.RegisterMoleEscaped(type);
+        if (wasHit && type != MoleType.Bomb) waveScoringHits++;
+    }
+
+    private void ResolveWaveCombo()
+    {
+        if (waveScoringTargets > 0 && waveScoringHits == 0)
+            gameManager.RegisterWaveMissed();
     }
 
     private void EnsureNineGrid()

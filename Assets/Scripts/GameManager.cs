@@ -155,11 +155,11 @@ public class GameManager : MonoBehaviour
         UpdateHud();
     }
 
-    public void RegisterMoleEscaped(MoleType type)
+    public void RegisterWaveMissed()
     {
-        if (!IsPlaying || type == MoleType.Bomb || combo == 0) return;
+        if (!IsPlaying || combo == 0) return;
         combo = 0;
-        menu?.PulseComboBreak("地鼠逃脱");
+        menu?.PulseComboBreak("整批地鼠逃脱");
         UpdateHud();
     }
 
@@ -192,7 +192,7 @@ public class GameManager : MonoBehaviour
         statusText.text = "挑战结束";
         finalScoreText.text = $"{DifficultyName}  ·  {score} 分";
         float accuracy = clickAttempts <= 0 ? 0f : correctHits * 100f / clickAttempts;
-        menu?.SetFinalStats($"最高连击  {bestCombo}     最高倍率  ×{bestMultiplier:0.#}\n命中率  {accuracy:0}%     普通鼠 {normalHits}  ·  奖励鼠 {rewardHits}  ·  炸弹鼠 {bombHits}");
+        menu?.SetFinalStats($"最高连击  {bestCombo}     最高倍率  ×{bestMultiplier:0.#}\n命中率  {accuracy:0}%\n普通鼠 {normalHits}  ·  奖励鼠 {rewardHits}  ·  炸弹鼠 {bombHits}");
         if (uiTheme != null) uiTheme.ShowGameplayHud(false);
         gameOverPanel.SetActive(true);
         UpdateHud();
