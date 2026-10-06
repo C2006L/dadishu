@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [RequireComponent(typeof(SpriteRenderer), typeof(Collider2D))]
 public class Mole : MonoBehaviour
@@ -23,6 +24,7 @@ public class Mole : MonoBehaviour
     private MoleType type;
     private Coroutine lifeRoutine;
     private static Sprite cachedHoleFrontSprite;
+    private static Sprite cachedRevealMaskSprite;
 
     public bool IsVisible => isVisible;
     public bool CanBeHit => isVisible && !isHit && hitCollider != null && hitCollider.enabled &&
@@ -213,7 +215,7 @@ public class Mole : MonoBehaviour
     private void CreateHoleFrontOverlay()
     {
         Transform slot = transform.parent;
-        if (slot == null || slot.Find("HoleFront") != null) return;
+        if (slot == null) return;
         SpriteRenderer holeRenderer = null;
         foreach (SpriteRenderer candidate in slot.GetComponentsInChildren<SpriteRenderer>(true))
             if (candidate != spriteRenderer && candidate.name.StartsWith("Hole")) { holeRenderer = candidate; break; }
@@ -229,17 +231,64 @@ public class Mole : MonoBehaviour
                 new Vector2(0.5f, 1f), source.pixelsPerUnit, 0, SpriteMeshType.FullRect, Vector4.zero, false);
             cachedHoleFrontSprite.name = "HoleFrontRuntime";
         }
-        GameObject frontObject = new GameObject("HoleFront");
-        frontObject.transform.SetParent(slot, false);
         float frontTopOffset = holeRenderer.transform.localScale.y *
             (-holeRenderer.sprite.bounds.size.y * 0.5f + holeRenderer.sprite.bounds.size.y * frontHeightRatio);
-        frontObject.transform.localPosition = holeRenderer.transform.localPosition + Vector3.up * frontTopOffset;
-        frontObject.transform.localRotation = holeRenderer.transform.localRotation;
-        frontObject.transform.localScale = holeRenderer.transform.localScale;
-        SpriteRenderer frontRenderer = frontObject.AddComponent<SpriteRenderer>();
-        frontRenderer.sprite = cachedHoleFrontSprite;
-        frontRenderer.color = holeRenderer.color;
-        frontRenderer.sortingLayerID = holeRenderer.sortingLayerID;
-        frontRenderer.sortingOrder = 4;
+        if (slot.Find("HoleFront") == null)
+        {
+            GameObject frontObject = new GameObject("HoleFront");
+            frontObject.transform.SetParent(slot, false);
+            frontObject.transform.localPosition = holeRenderer.transform.localPosition + Vector3.up * frontTopOffset;
+            frontObject.transform.localRotation = holeRenderer.transform.localRotation;
+            frontObject.transform.localScale = holeRenderer.transform.localScale;
+            SpriteRenderer frontRenderer = frontObject.AddComponent<SpriteRenderer>();
+            frontRenderer.sprite = cachedHoleFrontSprite;
+            frontRenderer.color = holeRenderer.color;
+            frontRenderer.sortingLayerID = holeRenderer.sortingLayerID;
+            frontRenderer.sortingOrder = 4;
+        }
+
+        CreateRevealMask(slot, holeRenderer, frontTopOffset);
+    }
+
+    private void CreateRevealMask(Transform slot, SpriteRenderer holeRenderer, float frontTopOffset)
+    {
+        // 每个洞口使用独立 SortingGroup，避免同列洞口的遮罩互相影响。
+        SortingGroup group = slot.GetComponent<SortingGroup>();
+        if (group == null) group = slot.gameObject.AddComponent<SortingGroup>();
+        group.sortingLayerID = holeRenderer.sortingLayerID;
+
+        Transform existing = slot.Find("MoleRevealMask");
+        if (existing == null)
+        {
+            if (cachedRevealMaskSprite == null)
+            {
+                Texture2D texture = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+                Color[] pixels = new Color[16];
+                for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+                texture.SetPixels(pixels);
+                texture.Apply();
+                texture.name = "MoleRevealMaskTexture";
+                cachedRevealMaskSprite = Sprite.Create(texture, new Rect(0f, 0f, 4f, 4f),
+                    new Vector2(0.5f, 0f), 4f, 0, SpriteMeshType.FullRect);
+                cachedRevealMaskSprite.name = "MoleRevealMaskSprite";
+            }
+
+            GameObject maskObject = new GameObject("MoleRevealMask");
+            maskObject.transform.SetParent(slot, false);
+            maskObject.transform.localPosition = holeRenderer.transform.localPosition +
+                                                 Vector3.up * (frontTopOffset + 0.02f);
+            float openingWidth = holeRenderer.sprite.bounds.size.x * holeRenderer.transform.localScale.x * 0.68f;
+            maskObject.transform.localScale = new Vector3(openingWidth, 5.5f, 1f);
+            SpriteMask mask = maskObject.AddComponent<SpriteMask>();
+            mask.sprite = cachedRevealMaskSprite;
+            mask.alphaCutoff = 0.1f;
+            mask.isCustomRangeActive = true;
+            mask.frontSortingLayerID = holeRenderer.sortingLayerID;
+            mask.backSortingLayerID = holeRenderer.sortingLayerID;
+            mask.frontSortingOrder = 3;
+            mask.backSortingOrder = 1;
+        }
+
+        spriteRenderer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
     }
 }

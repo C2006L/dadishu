@@ -188,9 +188,8 @@ public class MoleSpawner : MonoBehaviour
         {
             if (i < positions.Length)
                 moles[i].transform.parent.localPosition = positions[i];
-            moles[i].transform.parent.localScale = difficulty == GameManager.GameDifficulty.Easy
-                ? Vector3.one
-                : Vector3.one * 0.86f;
+            // 三种模式保持一致尺寸；九宫格依靠更大的行距和洞口遮罩避免穿插。
+            moles[i].transform.parent.localScale = Vector3.one;
             bool enabled = difficulty != GameManager.GameDifficulty.Easy || i < 3 || i >= 6;
             moles[i].transform.parent.gameObject.SetActive(enabled);
         }
