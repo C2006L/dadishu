@@ -7,7 +7,7 @@ public class Mole : MonoBehaviour
     [SerializeField] private float popDuration = 0.22f;
     [SerializeField] private float hideDuration = 0.22f;
     [SerializeField] private float riseDistance = 1.62f;
-    [SerializeField] private float shownHeightOffset = 0.18f;
+    [SerializeField] private float shownHeightOffset = -0.06f;
     [SerializeField] private Color hitColor = new Color(1f, 0.65f, 0.65f, 1f);
 
     private GameManager gameManager;
@@ -25,6 +25,8 @@ public class Mole : MonoBehaviour
     private static Sprite cachedHoleFrontSprite;
 
     public bool IsVisible => isVisible;
+    public bool CanBeHit => isVisible && !isHit && hitCollider != null && hitCollider.enabled &&
+                            spriteRenderer != null && spriteRenderer.color.a >= 0.20f;
 
     private void Awake()
     {
@@ -37,6 +39,8 @@ public class Mole : MonoBehaviour
         spriteRenderer.sortingOrder = 2;
         normalSprite = spriteRenderer.sprite;
         shownScale = transform.localScale;
+        // 兼容旧场景中序列化的偏高数值，限制最高位置，防止下排地鼠顶进上一排土堆。
+        shownHeightOffset = Mathf.Min(shownHeightOffset, -0.06f);
         shownPosition = transform.localPosition + Vector3.up * shownHeightOffset;
         hiddenPosition = shownPosition + Vector3.down * riseDistance;
         CreateHoleFrontOverlay();
@@ -59,8 +63,8 @@ public class Mole : MonoBehaviour
         isVisible = true;
         spriteRenderer.color = new Color(1f, 1f, 1f, 0f);
         spriteRenderer.enabled = true;
-        // 升起过程中不可点击，避免视觉尚未出现时提前命中。
-        hitCollider.enabled = false;
+        // 碰撞器跟随地鼠从洞内上升；地鼠进入可见区域后即可命中，不再丢失快速点击。
+        hitCollider.enabled = true;
         transform.localPosition = hiddenPosition;
         transform.localScale = shownScale * 0.88f;
         lifeRoutine = StartCoroutine(LifeRoutine(visibleTime));
@@ -71,7 +75,6 @@ public class Mole : MonoBehaviour
         yield return MoveAndScaleRoutine(hiddenPosition, shownPosition, shownScale * 0.88f, shownScale,
             popDuration, 0f, 1f);
         if (!isVisible || isHit) yield break;
-        hitCollider.enabled = true;
         yield return new WaitForSeconds(Mathf.Max(0.1f, visibleTime - popDuration - hideDuration));
         if (!isVisible || isHit) yield break;
         hitCollider.enabled = false;
@@ -153,8 +156,8 @@ public class Mole : MonoBehaviour
         if (boxCollider == null || spriteRenderer.sprite == null) return;
         Vector2 spriteSize = spriteRenderer.sprite.bounds.size;
         // 点击区域覆盖头部和身体，但不延伸到透明边缘、皇冠火花或炸弹引线。
-        boxCollider.size = new Vector2(spriteSize.x * 0.82f, spriteSize.y * 0.58f);
-        boxCollider.offset = new Vector2(0f, spriteSize.y * 0.18f);
+        boxCollider.size = new Vector2(spriteSize.x * 0.88f, spriteSize.y * 0.66f);
+        boxCollider.offset = new Vector2(0f, spriteSize.y * 0.14f);
     }
 
     private Sprite LoadRuntimeSprite(string path, string name, MoleType spriteType)

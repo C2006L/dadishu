@@ -137,9 +137,9 @@ public static class WhackAMoleProjectBuilder
         GameObject molePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(MolePrefabPath);
         Vector2[] positions =
         {
-            new Vector2(-5.1f, 1.85f), new Vector2(0f, 1.85f), new Vector2(5.1f, 1.85f),
-            new Vector2(-5.1f, -0.75f), new Vector2(0f, -0.75f), new Vector2(5.1f, -0.75f),
-            new Vector2(-5.1f, -3.35f), new Vector2(0f, -3.35f), new Vector2(5.1f, -3.35f)
+            new Vector2(-5.1f, 1.95f), new Vector2(0f, 1.95f), new Vector2(5.1f, 1.95f),
+            new Vector2(-5.1f, -0.90f), new Vector2(0f, -0.90f), new Vector2(5.1f, -0.90f),
+            new Vector2(-5.1f, -3.75f), new Vector2(0f, -3.75f), new Vector2(5.1f, -3.75f)
         };
         Mole[] moles = new Mole[positions.Length];
 

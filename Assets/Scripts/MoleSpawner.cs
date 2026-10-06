@@ -35,8 +35,8 @@ public class MoleSpawner : MonoBehaviour
                 rewardChance = 0.18f;
                 break;
             default:
-                startVisibleTime = 1.35f; endVisibleTime = 0.90f;
-                startGap = 0.75f; endGap = 0.48f;
+                startVisibleTime = 1.50f; endVisibleTime = 1.02f;
+                startGap = 0.86f; endGap = 0.56f;
                 minWave = 1; maxWave = 2; doubleWaveChance = 0.60f;
                 rewardChance = 0.20f;
                 break;
@@ -180,9 +180,9 @@ public class MoleSpawner : MonoBehaviour
                 new Vector2(-5.1f, -2.15f), new Vector2(0f, -2.15f), new Vector2(5.1f, -2.15f)
             }
             : new[] {
-                new Vector2(-5.1f, 1.85f), new Vector2(0f, 1.85f), new Vector2(5.1f, 1.85f),
-                new Vector2(-5.1f, -0.75f), new Vector2(0f, -0.75f), new Vector2(5.1f, -0.75f),
-                new Vector2(-5.1f, -3.35f), new Vector2(0f, -3.35f), new Vector2(5.1f, -3.35f)
+                new Vector2(-5.1f, 1.95f), new Vector2(0f, 1.95f), new Vector2(5.1f, 1.95f),
+                new Vector2(-5.1f, -0.90f), new Vector2(0f, -0.90f), new Vector2(5.1f, -0.90f),
+                new Vector2(-5.1f, -3.75f), new Vector2(0f, -3.75f), new Vector2(5.1f, -3.75f)
             };
         for (int i = 0; i < moles.Length; i++)
         {
@@ -190,7 +190,7 @@ public class MoleSpawner : MonoBehaviour
                 moles[i].transform.parent.localPosition = positions[i];
             moles[i].transform.parent.localScale = difficulty == GameManager.GameDifficulty.Easy
                 ? Vector3.one
-                : Vector3.one * 0.88f;
+                : Vector3.one * 0.86f;
             bool enabled = difficulty != GameManager.GameDifficulty.Easy || i < 3 || i >= 6;
             moles[i].transform.parent.gameObject.SetActive(enabled);
         }

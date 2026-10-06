@@ -1,11 +1,15 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class InputManager : MonoBehaviour
 {
     [SerializeField] private Camera gameCamera;
     [SerializeField] private LayerMask moleLayer;
     [SerializeField] private GameManager gameManager;
+
+    private readonly List<RaycastResult> uiRaycastResults = new List<RaycastResult>();
 
     private void Awake()
     {
@@ -42,19 +46,40 @@ public class InputManager : MonoBehaviour
 
     private void HandleHit(Vector2 screenPosition)
     {
-        if (EventSystem.current != null)
+        // HUD 文字和装饰图片不应吞掉对其下方地鼠的点击，只有按钮、滑条等交互控件才拦截。
+        if (IsPointerOverInteractiveUi(screenPosition)) return;
+
+        if (gameCamera == null) gameCamera = Camera.main;
+        if (gameCamera == null) return;
+        Vector3 world = gameCamera.ScreenToWorldPoint(screenPosition);
+        // 给予约一个鼠标指针宽度的容错，避免视觉上点到边缘却因单点检测漏判。
+        Collider2D[] hits = Physics2D.OverlapCircleAll(world, 0.28f, moleLayer);
+        Mole nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (Collider2D hit in hits)
         {
-            bool overUi = Input.touchCount > 0
-                ? EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)
-                : EventSystem.current.IsPointerOverGameObject();
-            if (overUi) return;
+            if (!hit.TryGetComponent(out Mole mole) || !mole.CanBeHit) continue;
+            float distance = ((Vector2)mole.transform.position - (Vector2)world).sqrMagnitude;
+            if (distance >= nearestDistance) continue;
+            nearest = mole;
+            nearestDistance = distance;
         }
 
-        Vector3 world = gameCamera.ScreenToWorldPoint(screenPosition);
-        Collider2D hit = Physics2D.OverlapPoint(world, moleLayer);
-        if (hit != null && hit.TryGetComponent(out Mole mole))
-            mole.Hit();
-        else
-            gameManager?.RegisterMiss();
+        if (nearest != null) nearest.Hit();
+        else gameManager?.RegisterMiss();
+    }
+
+    private bool IsPointerOverInteractiveUi(Vector2 screenPosition)
+    {
+        if (EventSystem.current == null) return false;
+        PointerEventData pointer = new PointerEventData(EventSystem.current) { position = screenPosition };
+        uiRaycastResults.Clear();
+        EventSystem.current.RaycastAll(pointer, uiRaycastResults);
+        foreach (RaycastResult result in uiRaycastResults)
+        {
+            Selectable selectable = result.gameObject.GetComponentInParent<Selectable>();
+            if (selectable != null && selectable.IsActive() && selectable.IsInteractable()) return true;
+        }
+        return false;
     }
 }
