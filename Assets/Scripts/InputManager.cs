@@ -8,12 +8,14 @@ public class InputManager : MonoBehaviour
     [SerializeField] private Camera gameCamera;
     [SerializeField] private LayerMask moleLayer;
     [SerializeField] private GameManager gameManager;
+    [SerializeField] private MoleSpawner spawner;
 
     private readonly List<RaycastResult> uiRaycastResults = new List<RaycastResult>();
 
     private void Awake()
     {
         if (gameManager == null) gameManager = FindObjectOfType<GameManager>();
+        if (spawner == null) spawner = FindObjectOfType<MoleSpawner>();
     }
 
     private void Update()
@@ -65,8 +67,15 @@ public class InputManager : MonoBehaviour
             nearestDistance = distance;
         }
 
-        if (nearest != null) nearest.Hit();
-        else gameManager?.RegisterMiss();
+        if (nearest != null)
+        {
+            nearest.Hit();
+            return;
+        }
+
+        // 已命中的地鼠下沉期间碰撞器已关闭；再次点到同一洞口不应被误判为点空。
+        if (spawner != null && spawner.ShouldSuppressMiss(world, 0.18f)) return;
+        gameManager?.RegisterMiss();
     }
 
     private bool IsPointerOverInteractiveUi(Vector2 screenPosition)

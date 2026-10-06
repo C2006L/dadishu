@@ -16,12 +16,14 @@ public class Mole : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private Collider2D hitCollider;
     private BoxCollider2D boxCollider;
+    private SpriteRenderer holeRenderer;
     private Sprite normalSprite;
     private Sprite rewardSprite;
     private Sprite bombSprite;
     private Vector3 shownScale, shownPosition, hiddenPosition;
     private bool isHit, isVisible;
     private MoleType type;
+    private int waveId;
     private Coroutine lifeRoutine;
     private static Sprite cachedHoleFrontSprite;
     private static Sprite cachedRevealMaskSprite;
@@ -55,10 +57,11 @@ public class Mole : MonoBehaviour
         spawner = owner;
     }
 
-    public void Show(MoleType newType, float visibleTime)
+    public void Show(MoleType newType, float visibleTime, int newWaveId)
     {
         StopAllCoroutines();
         type = newType;
+        waveId = newWaveId;
         ApplyTypeSprite();
         SyncHitCollider();
         isHit = false;
@@ -81,7 +84,7 @@ public class Mole : MonoBehaviour
         if (!isVisible || isHit) yield break;
         hitCollider.enabled = false;
         yield return HideRoutine();
-        spawner?.NotifyMoleFinished(this, false, type);
+        spawner?.NotifyMoleResolved(this, waveId);
     }
 
     public void Hide()
@@ -109,6 +112,8 @@ public class Mole : MonoBehaviour
         if (!isVisible || isHit || gameManager == null || !gameManager.IsPlaying) return;
         isHit = true;
         hitCollider.enabled = false;
+        // 成功点击必须立即计入所属批次，不能依赖后续下沉动画是否完整执行。
+        spawner?.NotifyMoleHit(this, waveId, type);
         int delta = gameManager.RegisterMoleHit(type);
         Color feedback = type == MoleType.Bomb ? new Color(1f, 0.18f, 0.08f) :
             type == MoleType.Reward ? new Color(1f, 0.82f, 0.08f) : new Color(1f, 0.92f, 0.25f);
@@ -128,7 +133,7 @@ public class Mole : MonoBehaviour
         yield return MoveAndScaleRoutine(pressedPosition, hiddenPosition, pressedScale, shownScale * 0.88f,
             hideDuration, 1f, 1f);
         SetHidden();
-        spawner?.NotifyMoleFinished(this, true, type);
+        spawner?.NotifyMoleResolved(this, waveId);
     }
 
     private IEnumerator HideRoutine()
@@ -216,7 +221,7 @@ public class Mole : MonoBehaviour
     {
         Transform slot = transform.parent;
         if (slot == null) return;
-        SpriteRenderer holeRenderer = null;
+        holeRenderer = null;
         foreach (SpriteRenderer candidate in slot.GetComponentsInChildren<SpriteRenderer>(true))
             if (candidate != spriteRenderer && candidate.name.StartsWith("Hole")) { holeRenderer = candidate; break; }
         if (holeRenderer == null || holeRenderer.sprite == null) return;
@@ -248,6 +253,14 @@ public class Mole : MonoBehaviour
         }
 
         CreateRevealMask(slot, holeRenderer, frontTopOffset);
+    }
+
+    public bool ShouldSuppressMiss(Vector2 worldPoint, float padding)
+    {
+        if (!isVisible || !isHit || holeRenderer == null || !holeRenderer.enabled) return false;
+        Bounds bounds = holeRenderer.bounds;
+        bounds.Expand(new Vector3(padding * 2f, padding * 2f, 0f));
+        return bounds.Contains(new Vector3(worldPoint.x, worldPoint.y, bounds.center.z));
     }
 
     private void CreateRevealMask(Transform slot, SpriteRenderer holeRenderer, float frontTopOffset)

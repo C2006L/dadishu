@@ -4,6 +4,17 @@ using UnityEngine;
 
 public class MoleSpawner : MonoBehaviour
 {
+    private sealed class WaveState
+    {
+        public readonly int Id;
+        public int Remaining;
+        public int ScoringTargets;
+        public int ScoringHits;
+
+        public WaveState(int id) { Id = id; }
+        public bool IsComplete => Remaining <= 0;
+    }
+
     [SerializeField] private GameManager gameManager;
     [SerializeField] private Mole[] moles;
 
@@ -14,7 +25,8 @@ public class MoleSpawner : MonoBehaviour
     private int minWave = 1, maxWave = 1;
     private float doubleWaveChance, rewardChance;
     private int lastIndex = -1;
-    private int waveScoringTargets, waveScoringHits;
+    private int nextWaveId;
+    private WaveState currentWave;
     private bool gridReady;
 
     public void SetDifficulty(GameManager.GameDifficulty value)
@@ -58,6 +70,7 @@ public class MoleSpawner : MonoBehaviour
     {
         if (spawnRoutine != null) StopCoroutine(spawnRoutine);
         spawnRoutine = null;
+        currentWave = null;
         HideAll();
     }
 
@@ -74,8 +87,8 @@ public class MoleSpawner : MonoBehaviour
             List<Mole> available = GetAvailableMoles();
             desired = Mathf.Min(desired, available.Count);
             MoleType[] waveTypes = BuildWaveTypes(desired);
-            waveScoringTargets = 0;
-            waveScoringHits = 0;
+            WaveState wave = new WaveState(++nextWaveId) { Remaining = desired };
+            currentWave = wave;
             HashSet<int> usedColumns = new HashSet<int>();
             for (int i = 0; i < desired; i++)
             {
@@ -85,22 +98,19 @@ public class MoleSpawner : MonoBehaviour
                 if (globalIndex >= 0) usedColumns.Add(globalIndex % 3);
                 available.RemoveAt(pick);
                 MoleType type = waveTypes[i];
-                if (type != MoleType.Bomb) waveScoringTargets++;
+                if (type != MoleType.Bomb) wave.ScoringTargets++;
                 float lifetime = Mathf.Lerp(startLifetime, endLifetime, gameManager.Progress01);
-                mole.Show(type, lifetime);
+                mole.Show(type, lifetime, wave.Id);
                 activeMoles.Add(mole);
             }
 
-            // 一批地鼠的生命周期与空场间隔完全分离。提前全部击中时，不再等待原定剩余寿命。
-            while (gameManager.IsRoundActive && activeMoles.Count > 0)
-            {
-                activeMoles.RemoveAll(m => m == null || !m.IsVisible);
-                if (activeMoles.Count > 0) yield return null;
-            }
+            // 只等待本批每只地鼠发出一次明确的完成回调，不再用动画可见性推测批次结果。
+            while (gameManager.IsRoundActive && currentWave == wave && !wave.IsComplete)
+                yield return null;
             if (!gameManager.IsRoundActive) break;
 
-            // 连击按整批结算：多目标波次只要命中任意一只得分地鼠，就不因其余地鼠逃脱而断连。
-            ResolveWaveCombo();
+            ResolveWaveCombo(wave);
+            if (currentWave == wave) currentWave = null;
 
             float emptyGap = Mathf.Lerp(startEmptyGap, endEmptyGap, gameManager.Progress01);
             yield return new WaitForSeconds(emptyGap);
@@ -163,15 +173,32 @@ public class MoleSpawner : MonoBehaviour
         return pick;
     }
 
-    public void NotifyMoleFinished(Mole mole, bool wasHit, MoleType type)
+    public void NotifyMoleHit(Mole mole, int waveId, MoleType type)
     {
-        activeMoles.Remove(mole);
-        if (wasHit && type != MoleType.Bomb) waveScoringHits++;
+        WaveState wave = currentWave;
+        if (wave == null || wave.Id != waveId || type == MoleType.Bomb) return;
+        wave.ScoringHits++;
     }
 
-    private void ResolveWaveCombo()
+    public void NotifyMoleResolved(Mole mole, int waveId)
     {
-        if (waveScoringTargets > 0 && waveScoringHits == 0)
+        WaveState wave = currentWave;
+        if (wave == null || wave.Id != waveId) return;
+        activeMoles.Remove(mole);
+        wave.Remaining = Mathf.Max(0, wave.Remaining - 1);
+    }
+
+    public bool ShouldSuppressMiss(Vector2 worldPoint, float padding)
+    {
+        if (moles == null) return false;
+        foreach (Mole mole in moles)
+            if (mole != null && mole.ShouldSuppressMiss(worldPoint, padding)) return true;
+        return false;
+    }
+
+    private void ResolveWaveCombo(WaveState wave)
+    {
+        if (wave != null && wave.ScoringTargets > 0 && wave.ScoringHits == 0)
             gameManager.RegisterWaveMissed();
     }
 
