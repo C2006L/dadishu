@@ -12,6 +12,9 @@ public class GardenMenuController : MonoBehaviour
     private GameObject hudRoot;
     private GameObject pauseOverlay;
     private Text comboText;
+    private Text comboHintText;
+    private Text comboFeedbackText;
+    private RectTransform comboProgressFill;
     private Text muteButtonText;
     private Text musicButtonText;
     private Text sfxButtonText;
@@ -55,15 +58,46 @@ public class GardenMenuController : MonoBehaviour
     public void UpdateCombo(int combo, float multiplier)
     {
         if (comboText == null) return;
-        comboText.text = combo <= 0 ? "连击  —" : $"连击  {combo}     ×{multiplier:0.#}";
-        comboText.color = combo >= 10 ? new Color(1f, 0.38f, 0.16f) : combo >= 6 ? Gold : combo >= 3 ? new Color(0.70f, 1f, 0.44f) : Color.white;
+        if (combo <= 0)
+        {
+            comboText.text = "连击未开始";
+            comboHintText.text = "连续命中 5 次提升倍率";
+        }
+        else if (combo < 5)
+        {
+            comboText.text = $"{combo} 连击   ×1";
+            comboHintText.text = $"再命中 {5 - combo} 次升至 ×1.5";
+        }
+        else if (combo < 10)
+        {
+            comboText.text = $"{combo} 连击   ×1.5";
+            comboHintText.text = $"再命中 {10 - combo} 次升至 ×2";
+        }
+        else
+        {
+            comboText.text = $"{combo} 连击   ×2";
+            comboHintText.text = "已达到最高倍率";
+        }
+        comboText.color = combo >= 10 ? new Color(0.64f, 0.17f, 0.06f) : combo >= 5 ? new Color(0.51f, 0.28f, 0.04f) : Ink;
+        if (comboProgressFill != null)
+        {
+            float progress = combo < 5 ? combo / 5f : combo < 10 ? (combo - 5) / 5f : 1f;
+            comboProgressFill.anchorMax = new Vector2(Mathf.Clamp01(progress), 1f);
+        }
     }
 
-    public void PulseComboBreak()
+    public void PulseComboBreak(string reason)
     {
-        if (comboText == null) return;
+        if (comboFeedbackText == null) return;
         if (comboPulse != null) StopCoroutine(comboPulse);
-        comboPulse = StartCoroutine(ComboBreakRoutine());
+        comboPulse = StartCoroutine(ComboMessageRoutine($"{reason} · 连击中断", new Color(0.78f, 0.16f, 0.07f)));
+    }
+
+    public void PulseComboMilestone(int combo, float multiplier)
+    {
+        if (comboFeedbackText == null) return;
+        if (comboPulse != null) StopCoroutine(comboPulse);
+        comboPulse = StartCoroutine(ComboMessageRoutine($"{combo} 连击！倍率提升至 ×{multiplier:0.#}", new Color(0.98f, 0.66f, 0.06f)));
     }
 
     public void SetFinalStats(string value) { if (finalStatsText != null) finalStatsText.text = value; }
@@ -93,7 +127,7 @@ public class GardenMenuController : MonoBehaviour
 
         Text title = Text(panel, "RefinedTitle", "地鼠大作战", 68, new Color(0.30f, 0.13f, 0.035f), FontStyle.Bold);
         Place(title.rectTransform, new Vector2(0f, 326f), new Vector2(900f, 82f));
-        Text subtitle = Text(panel, "Subtitle", "选择模式  ·  60 秒挑战最高连击", 23, new Color(0.39f, 0.22f, 0.08f));
+        Text subtitle = Text(panel, "Subtitle", "选择一块花园路牌，开始 60 秒挑战", 23, new Color(0.39f, 0.22f, 0.08f));
         Place(subtitle.rectTransform, new Vector2(0f, 254f), new Vector2(900f, 42f));
 
         CreateModeCard(panel, "EasyCard", new Vector2(-455f, -36f), "简单", "轻松热身", "6 个洞口 · 单只地鼠\n速度舒缓 · 无特殊鼠", "UI/EasyBadge",
@@ -103,39 +137,37 @@ public class GardenMenuController : MonoBehaviour
         CreateModeCard(panel, "HardCard", new Vector2(455f, -36f), "困难", "避开炸弹", "九宫格 · 最多 3 只\n奖励鼠 +30 · 炸弹 -20", "UI/HardBadge",
             new Color(1f, 0.90f, 0.70f), new Color(0.86f, 0.22f, 0.12f), manager.StartHardMode);
 
-        Text footer = Text(panel, "Footer", "连续命中可提升倍率：×1.5  →  ×2  →  ×3", 21, new Color(0.36f, 0.20f, 0.07f));
-        Place(footer.rectTransform, new Vector2(0f, -354f), new Vector2(1100f, 42f));
+        Text footer = Text(panel, "Footer", "连续命中 5 次 ×1.5，10 次 ×2  ·  点空、漏鼠或误击炸弹会中断", 21, new Color(0.36f, 0.20f, 0.07f));
+        Place(footer.rectTransform, new Vector2(0f, -280f), new Vector2(1100f, 42f));
     }
 
     private void CreateModeCard(Transform parent, string name, Vector2 position, string mode, string tagline,
         string rules, string iconPath, Color baseColor, Color accent, UnityAction action)
     {
-        GameObject card = Panel(parent, name, baseColor);
-        Place(card.GetComponent<RectTransform>(), position, new Vector2(388f, 432f));
-        Roundify(card);
-        AddOutline(card, new Color(accent.r * 0.68f, accent.g * 0.68f, accent.b * 0.68f), new Vector2(4f, -4f));
-        AddShadow(card, new Color(0.28f, 0.13f, 0.025f, 0.48f), new Vector2(9f, -11f));
+        Image cardImage = Image(parent, name, LoadSprite("UI/GardenNoticeBoard"));
+        GameObject card = cardImage.gameObject;
+        Place(cardImage.rectTransform, position, new Vector2(354f, 472f));
+        cardImage.color = Color.Lerp(Color.white, baseColor, 0.08f);
+        cardImage.preserveAspect = true;
         Button button = card.AddComponent<Button>();
+        button.targetGraphic = cardImage;
         ColorBlock cb = button.colors;
-        cb.normalColor = Color.white; cb.highlightedColor = new Color(1.12f, 1.12f, 1.12f);
-        cb.pressedColor = new Color(0.80f, 0.80f, 0.80f); cb.fadeDuration = 0.10f; button.colors = cb;
+        cb.normalColor = Color.white; cb.highlightedColor = new Color(1f, 0.96f, 0.78f);
+        cb.pressedColor = new Color(0.84f, 0.84f, 0.78f); cb.fadeDuration = 0.10f; button.colors = cb;
         button.onClick.AddListener(action);
 
         Image icon = Image(card.transform, "Badge", LoadSprite(iconPath));
-        Place(icon.rectTransform, new Vector2(0f, 107f), new Vector2(145f, 145f));
+        Place(icon.rectTransform, new Vector2(0f, 112f), new Vector2(126f, 126f));
         icon.preserveAspect = true; icon.raycastTarget = false;
         Text heading = Text(card.transform, "Mode", mode + "模式", 41, new Color(0.27f, 0.13f, 0.035f), FontStyle.Bold);
-        Place(heading.rectTransform, new Vector2(0f, 8f), new Vector2(340f, 58f));
+        Place(heading.rectTransform, new Vector2(0f, 20f), new Vector2(300f, 58f));
         Text tag = Text(card.transform, "Tagline", tagline, 22, accent, FontStyle.Normal);
-        Place(tag.rectTransform, new Vector2(0f, -42f), new Vector2(340f, 38f));
+        Place(tag.rectTransform, new Vector2(0f, -30f), new Vector2(300f, 38f));
         Text detail = Text(card.transform, "Rules", rules, 19, new Color(0.31f, 0.20f, 0.09f));
         detail.lineSpacing = 1.2f;
-        Place(detail.rectTransform, new Vector2(0f, -105f), new Vector2(350f, 74f));
-        GameObject choose = Panel(card.transform, "Choose", accent);
-        Place(choose.GetComponent<RectTransform>(), new Vector2(0f, -176f), new Vector2(250f, 55f));
-        Roundify(choose);
-        Text chooseText = Text(choose.transform, "Label", "开始挑战  ›", 24, Color.white, FontStyle.Bold);
-        Place(chooseText.rectTransform, Vector2.zero, new Vector2(240f, 50f));
+        Place(detail.rectTransform, new Vector2(0f, -93f), new Vector2(300f, 72f));
+        Text chooseText = Text(card.transform, "ChooseLabel", "点击木牌开始", 20, accent, FontStyle.Bold);
+        Place(chooseText.rectTransform, new Vector2(0f, -136f), new Vector2(260f, 40f));
     }
 
     private void BuildHud()
@@ -150,23 +182,35 @@ public class GardenMenuController : MonoBehaviour
         tr.anchorMin = new Vector2(0f, 1f); tr.anchorMax = new Vector2(1f, 1f); tr.pivot = new Vector2(0.5f, 1f);
         tr.sizeDelta = new Vector2(0f, 126f); tr.anchoredPosition = Vector2.zero;
 
-        GameObject scorePill = CreateHudPill(top.transform, "ScorePill", new Vector2(-770f, -52f), new Vector2(300f, 72f), new Color(0.25f, 0.49f, 0.15f, 0.94f));
-        StyleExistingHudText("ScoreText", scorePill.transform, Vector2.zero, new Vector2(276f, 62f), TextAnchor.MiddleCenter, new Color(1f, 0.93f, 0.42f));
+        GameObject scorePill = CreateHudPlaque(top.transform, "ScoreBoard", new Vector2(-780f, -52f), new Vector2(280f, 88f));
+        StyleExistingHudText("ScoreText", scorePill.transform, Vector2.zero, new Vector2(242f, 54f), TextAnchor.MiddleCenter, new Color(0.30f, 0.14f, 0.035f), 28);
 
-        GameObject comboPill = CreateHudPill(top.transform, "ComboPill", new Vector2(-435f, -52f), new Vector2(300f, 72f), new Color(0.42f, 0.27f, 0.08f, 0.94f));
-        comboText = Text(comboPill.transform, "ComboText", "连击  —", 27, Color.white, FontStyle.Bold);
-        Place(comboText.rectTransform, Vector2.zero, new Vector2(276f, 62f));
+        GameObject comboPill = CreateHudPlaque(top.transform, "ComboBoard", new Vector2(-435f, -52f), new Vector2(360f, 96f));
+        comboText = Text(comboPill.transform, "ComboText", "连击未开始", 22, Ink, FontStyle.Bold);
+        Place(comboText.rectTransform, new Vector2(0f, 17f), new Vector2(320f, 28f));
+        comboHintText = Text(comboPill.transform, "ComboHint", "连续命中 5 次提升倍率", 13, new Color(0.35f, 0.22f, 0.08f));
+        Place(comboHintText.rectTransform, new Vector2(0f, -10f), new Vector2(320f, 20f));
+        GameObject comboTrack = Panel(comboPill.transform, "ComboTrack", new Color(0.30f, 0.18f, 0.07f, 0.35f));
+        RectTransform trackRect = comboTrack.GetComponent<RectTransform>(); Place(trackRect, new Vector2(0f, -31f), new Vector2(286f, 7f));
+        GameObject comboFill = Panel(comboTrack.transform, "ComboFill", new Color(0.39f, 0.67f, 0.14f));
+        comboProgressFill = comboFill.GetComponent<RectTransform>();
+        comboProgressFill.anchorMin = Vector2.zero; comboProgressFill.anchorMax = new Vector2(0f, 1f);
+        comboProgressFill.pivot = new Vector2(0f, 0.5f); comboProgressFill.offsetMin = comboProgressFill.offsetMax = Vector2.zero;
 
-        GameObject statusPill = CreateHudPill(top.transform, "StatusPill", new Vector2(0f, -52f), new Vector2(520f, 72f), new Color(0.96f, 0.82f, 0.43f, 0.95f));
-        StyleExistingHudText("StatusText", statusPill.transform, Vector2.zero, new Vector2(490f, 62f), TextAnchor.MiddleCenter, new Color(0.25f, 0.14f, 0.035f));
+        GameObject statusPill = CreateHudPlaque(top.transform, "StatusBoard", new Vector2(-15f, -52f), new Vector2(430f, 88f));
+        StyleExistingHudText("StatusText", statusPill.transform, Vector2.zero, new Vector2(382f, 52f), TextAnchor.MiddleCenter, new Color(0.25f, 0.14f, 0.035f), 23);
 
-        GameObject timePill = CreateHudPill(top.transform, "TimePill", new Vector2(420f, -52f), new Vector2(250f, 72f), new Color(0.19f, 0.48f, 0.58f, 0.95f));
-        StyleExistingHudText("TimeText", timePill.transform, Vector2.zero, new Vector2(228f, 62f), TextAnchor.MiddleCenter, Color.white);
+        GameObject timePill = CreateHudPlaque(top.transform, "TimeBoard", new Vector2(345f, -52f), new Vector2(240f, 88f));
+        StyleExistingHudText("TimeText", timePill.transform, Vector2.zero, new Vector2(205f, 52f), TextAnchor.MiddleCenter, new Color(0.25f, 0.14f, 0.035f), 26);
 
-        CreateSmallButton(top.transform, "MuteButton", new Vector2(665f, -52f), new Vector2(130f, 72f), "音效", () => {
+        CreateSmallButton(top.transform, "MuteButton", new Vector2(570f, -52f), new Vector2(116f, 66f), "音效", () => {
             audioManager.ToggleSfx(); RefreshAudioLabels();
         }, out muteButtonText);
-        CreateSmallButton(top.transform, "PauseButton", new Vector2(835f, -52f), new Vector2(160f, 72f), "暂停 Ⅱ", manager.PauseGame, out _);
+        CreateSmallButton(top.transform, "PauseButton", new Vector2(735f, -52f), new Vector2(132f, 66f), "暂停 Ⅱ", manager.PauseGame, out _);
+
+        comboFeedbackText = Text(hudRoot.transform, "ComboFeedback", "", 30, Gold, FontStyle.Bold);
+        // 反馈放在 HUD 下方，避免与中央状态牌重叠。
+        Place(comboFeedbackText.rectTransform, new Vector2(0f, 330f), new Vector2(760f, 58f));
     }
 
     private void BuildPausePanel()
@@ -175,31 +219,31 @@ public class GardenMenuController : MonoBehaviour
         RectTransform overlay = pauseOverlay.GetComponent<RectTransform>();
         overlay.anchorMin = Vector2.zero; overlay.anchorMax = Vector2.one; overlay.offsetMin = overlay.offsetMax = Vector2.zero;
         pauseOverlay.transform.SetAsLastSibling();
-        GameObject panel = Panel(pauseOverlay.transform, "PauseCard", new Color(1f, 0.91f, 0.66f, 1f));
-        Place(panel.GetComponent<RectTransform>(), Vector2.zero, new Vector2(720f, 720f));
-        Roundify(panel);
-        AddOutline(panel, new Color(0.45f, 0.23f, 0.07f), new Vector2(6f, -6f)); AddShadow(panel, Color.black, new Vector2(15f, -18f));
-        Text title = Text(panel.transform, "Title", "游戏暂停", 60, new Color(0.35f, 0.17f, 0.04f), FontStyle.Bold);
-        Place(title.rectTransform, new Vector2(0f, 276f), new Vector2(600f, 82f));
-        Text hint = Text(panel.transform, "Hint", "休息一下，调整设置后继续挑战", 24, new Color(0.43f, 0.28f, 0.11f));
-        Place(hint.rectTransform, new Vector2(0f, 220f), new Vector2(600f, 38f));
+        Image panelImage = Image(pauseOverlay.transform, "PauseCard", LoadSprite("UI/GardenNoticeBoard"));
+        panelImage.preserveAspect = true;
+        GameObject panel = panelImage.gameObject;
+        Place(panelImage.rectTransform, Vector2.zero, new Vector2(620f, 800f));
+        Text title = Text(panel.transform, "Title", "休息一下", 54, new Color(0.35f, 0.17f, 0.04f), FontStyle.Bold);
+        Place(title.rectTransform, new Vector2(0f, 260f), new Vector2(500f, 72f));
+        Text hint = Text(panel.transform, "Hint", "调整声音，准备好后继续挑战", 21, new Color(0.43f, 0.28f, 0.11f));
+        Place(hint.rectTransform, new Vector2(0f, 210f), new Vector2(500f, 34f));
 
         Text volumeLabel = Text(panel.transform, "VolumeLabel", "总音量", 28, new Color(0.30f, 0.16f, 0.05f), FontStyle.Bold);
         volumeLabel.alignment = TextAnchor.MiddleLeft;
-        Place(volumeLabel.rectTransform, new Vector2(-210f, 137f), new Vector2(180f, 42f));
-        Slider slider = CreateSlider(panel.transform, new Vector2(75f, 137f));
+        Place(volumeLabel.rectTransform, new Vector2(-175f, 128f), new Vector2(150f, 42f));
+        Slider slider = CreateSlider(panel.transform, new Vector2(70f, 128f));
         slider.value = audioManager != null ? audioManager.MasterVolume : 0.8f;
         slider.onValueChanged.AddListener(v => audioManager.SetMasterVolume(v));
 
-        CreateSmallButton(panel.transform, "MusicToggle", new Vector2(-160f, 48f), new Vector2(280f, 68f), "背景音乐", () => {
+        CreateSmallButton(panel.transform, "MusicToggle", new Vector2(-145f, 38f), new Vector2(250f, 62f), "背景音乐", () => {
             audioManager.SetMusicEnabled(!audioManager.MusicEnabled); RefreshAudioLabels();
         }, out musicButtonText);
-        CreateSmallButton(panel.transform, "SfxToggle", new Vector2(160f, 48f), new Vector2(280f, 68f), "游戏音效", () => {
+        CreateSmallButton(panel.transform, "SfxToggle", new Vector2(145f, 38f), new Vector2(250f, 62f), "游戏音效", () => {
             audioManager.SetSfxEnabled(!audioManager.SfxEnabled); RefreshAudioLabels();
         }, out sfxButtonText);
-        CreateWideButton(panel.transform, "Resume", "继续游戏", new Vector2(0f, -55f), new Color(0.38f, 0.73f, 0.20f), manager.ResumeGame);
-        CreateWideButton(panel.transform, "Restart", "重新开始", new Vector2(0f, -150f), new Color(0.88f, 0.53f, 0.12f), manager.RestartGame);
-        CreateWideButton(panel.transform, "Menu", "返回模式选择", new Vector2(0f, -245f), new Color(0.55f, 0.29f, 0.12f), manager.ReturnToMenu);
+        CreateWideButton(panel.transform, "Resume", "继续游戏", new Vector2(0f, -64f), new Color(0.38f, 0.66f, 0.16f), manager.ResumeGame);
+        CreateWideButton(panel.transform, "Restart", "重新开始", new Vector2(0f, -151f), new Color(0.80f, 0.46f, 0.10f), manager.RestartGame);
+        CreateWideButton(panel.transform, "Menu", "返回模式选择", new Vector2(0f, -238f), new Color(0.48f, 0.25f, 0.10f), manager.ReturnToMenu);
         RefreshAudioLabels();
         pauseOverlay.SetActive(false);
     }
@@ -209,38 +253,42 @@ public class GardenMenuController : MonoBehaviour
         Transform panel = Find("GameOverPanel");
         if (panel == null) return;
         RectTransform pr = panel.GetComponent<RectTransform>();
-        pr.sizeDelta = new Vector2(820f, 610f); pr.anchoredPosition = Vector2.zero;
-        panel.GetComponent<Image>().color = new Color(1f, 0.91f, 0.66f, 0.99f);
-        Roundify(panel.gameObject);
-        AddOutline(panel.gameObject, new Color(0.45f, 0.23f, 0.07f), new Vector2(6f, -6f)); AddShadow(panel.gameObject, Color.black, new Vector2(15f, -18f));
-        ConfigureExisting("GameOverTitle", "挑战完成", 58, new Color(0.36f, 0.17f, 0.035f), new Vector2(0f, 205f), new Vector2(650f, 80f));
-        ConfigureExisting("FinalScoreText", "简单模式  ·  0 分", 39, new Color(0.23f, 0.31f, 0.12f), new Vector2(0f, 120f), new Vector2(650f, 70f));
-        finalStatsText = Text(panel, "FinalStats", "最高连击  0", 27, new Color(0.37f, 0.25f, 0.10f));
-        finalStatsText.lineSpacing = 1.35f;
-        Place(finalStatsText.rectTransform, new Vector2(0f, 34f), new Vector2(650f, 100f));
+        pr.anchorMin = Vector2.zero; pr.anchorMax = Vector2.one; pr.offsetMin = pr.offsetMax = Vector2.zero;
+        panel.GetComponent<Image>().color = new Color(0.04f, 0.09f, 0.035f, 0.72f);
+        Image resultBoard = Image(panel, "ResultBoard", LoadSprite("UI/GardenNoticeBoard"));
+        Place(resultBoard.rectTransform, Vector2.zero, new Vector2(650f, 820f)); resultBoard.preserveAspect = true; resultBoard.transform.SetAsFirstSibling();
+        ConfigureExisting("GameOverTitle", "挑战完成", 56, new Color(0.36f, 0.17f, 0.035f), new Vector2(0f, 255f), new Vector2(560f, 76f));
+        ConfigureExisting("FinalScoreText", "简单模式  ·  0 分", 38, new Color(0.23f, 0.31f, 0.12f), new Vector2(0f, 175f), new Vector2(560f, 66f));
+        finalStatsText = Text(panel, "FinalStats", "最高连击  0", 23, new Color(0.37f, 0.25f, 0.10f));
+        finalStatsText.lineSpacing = 1.45f;
+        Place(finalStatsText.rectTransform, new Vector2(0f, 72f), new Vector2(540f, 112f));
         Transform restart = Find("RestartButton");
         if (restart != null)
         {
-            Place(restart.GetComponent<RectTransform>(), new Vector2(0f, -92f), new Vector2(500f, 72f));
+            Place(restart.GetComponent<RectTransform>(), new Vector2(0f, -100f), new Vector2(460f, 68f));
             StyleButton(restart.gameObject, "再来一局", new Color(0.38f, 0.73f, 0.20f));
         }
         Transform oldBack = panel.Find("BackToMenuButton");
         if (oldBack != null) oldBack.gameObject.SetActive(false);
-        CreateWideButton(panel, "RefinedBack", "返回模式选择", new Vector2(0f, -190f), new Color(0.68f, 0.36f, 0.11f), manager.ReturnToMenu);
+        CreateWideButton(panel, "RefinedBack", "返回模式选择", new Vector2(0f, -190f), new Color(0.58f, 0.30f, 0.10f), manager.ReturnToMenu);
     }
 
-    private IEnumerator ComboBreakRoutine()
+    private IEnumerator ComboMessageRoutine(string message, Color color)
     {
-        comboText.text = "连击中断"; comboText.color = new Color(1f, 0.35f, 0.20f);
+        comboFeedbackText.text = message;
+        comboFeedbackText.color = color;
         float elapsed = 0f;
-        while (elapsed < 0.45f)
+        while (elapsed < 0.85f)
         {
             elapsed += Time.unscaledDeltaTime;
-            comboText.rectTransform.localScale = Vector3.one * (1f + Mathf.Sin(elapsed * 22f) * 0.08f);
+            float t = Mathf.Clamp01(elapsed / 0.85f);
+            comboFeedbackText.rectTransform.localScale = Vector3.one * (1f + Mathf.Sin(t * Mathf.PI) * 0.12f);
+            Color current = color; current.a = 1f - Mathf.Clamp01((t - 0.65f) / 0.35f); comboFeedbackText.color = current;
             yield return null;
         }
-        comboText.rectTransform.localScale = Vector3.one;
-        comboText.text = "连击  —"; comboText.color = Color.white;
+        comboFeedbackText.rectTransform.localScale = Vector3.one;
+        comboFeedbackText.text = "";
+        comboPulse = null;
     }
 
     private void RefreshAudioLabels()
@@ -285,14 +333,13 @@ public class GardenMenuController : MonoBehaviour
         Text text = Text(obj.transform, "Label", label, 28, Color.white, FontStyle.Bold); Place(text.rectTransform, Vector2.zero, new Vector2(480f, 64f));
     }
 
-    private GameObject CreateHudPill(Transform parent, string name, Vector2 position, Vector2 size, Color color)
+    private GameObject CreateHudPlaque(Transform parent, string name, Vector2 position, Vector2 size)
     {
-        GameObject pill = Panel(parent, name, color);
-        Place(pill.GetComponent<RectTransform>(), position, size);
-        Roundify(pill);
-        AddOutline(pill, new Color(1f, 0.92f, 0.60f, 0.58f), new Vector2(2f, -2f));
-        AddShadow(pill, new Color(0.12f, 0.08f, 0.02f, 0.48f), new Vector2(4f, -5f));
-        return pill;
+        Image plaque = Image(parent, name, LoadSprite("UI/HudWoodPlaque"));
+        Place(plaque.rectTransform, position, size);
+        plaque.preserveAspect = false;
+        plaque.raycastTarget = false;
+        return plaque.gameObject;
     }
 
     private void Roundify(GameObject obj)
@@ -325,15 +372,16 @@ public class GardenMenuController : MonoBehaviour
             SpriteMeshType.FullRect, new Vector4(20f, 20f, 20f, 20f));
     }
 
-    private void StyleExistingHudText(string name, Transform newParent, Vector2 position, Vector2 size, TextAnchor alignment, Color color)
+    private void StyleExistingHudText(string name, Transform newParent, Vector2 position, Vector2 size, TextAnchor alignment, Color color, int fontSize)
     {
         Transform t = Find(name); if (t == null) return;
         t.SetParent(newParent, false);
         // 场景旧版 HUD 自带黑色 Outline。更换字体后继续叠加会形成粗重影，先禁用旧效果。
         foreach (Shadow effect in t.GetComponents<Shadow>())
             effect.enabled = false;
-        Text text = t.GetComponent<Text>(); text.font = font; text.fontSize = 32; text.fontStyle = FontStyle.Bold; text.color = color; text.alignment = alignment;
-        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        Text text = t.GetComponent<Text>(); text.font = font; text.fontSize = fontSize; text.fontStyle = FontStyle.Bold; text.color = color; text.alignment = alignment;
+        text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
         if (color.grayscale > 0.58f)
         {
             Shadow subtle = t.gameObject.AddComponent<Shadow>();

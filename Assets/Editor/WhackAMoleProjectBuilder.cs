@@ -23,6 +23,8 @@ public static class WhackAMoleProjectBuilder
         ConfigureTexture("Assets/Sprites/Background.png", false, 100f);
         ConfigureTexture("Assets/Sprites/Hole.png", true, 100f);
         ConfigureTexture("Assets/Sprites/Mole.png", true, 100f);
+        ConfigureTexture("Assets/Resources/UI/GardenNoticeBoard.png", true, 100f);
+        ConfigureTexture("Assets/Resources/UI/HudWoodPlaque.png", true, 100f);
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 
         Sprite backgroundSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/Background.png");

@@ -10,7 +10,7 @@ public class MoleSpawner : MonoBehaviour
     private readonly List<Mole> activeMoles = new List<Mole>();
     private Coroutine spawnRoutine;
     private GameManager.GameDifficulty difficulty;
-    private float startVisibleTime, endVisibleTime, startGap, endGap;
+    private float startLifetime, endLifetime, startEmptyGap, endEmptyGap;
     private int minWave = 1, maxWave = 1;
     private float doubleWaveChance, rewardChance;
     private int lastIndex = -1;
@@ -24,19 +24,19 @@ public class MoleSpawner : MonoBehaviour
         switch (difficulty)
         {
             case GameManager.GameDifficulty.Easy:
-                startVisibleTime = 1.25f; endVisibleTime = 0.78f;
-                startGap = 0.62f; endGap = 0.34f;
+                startLifetime = 1.50f; endLifetime = 1.02f;
+                startEmptyGap = 0.55f; endEmptyGap = 0.36f;
                 minWave = maxWave = 1; doubleWaveChance = rewardChance = 0f;
                 break;
             case GameManager.GameDifficulty.Hard:
-                startVisibleTime = 1.10f; endVisibleTime = 0.68f;
-                startGap = 0.55f; endGap = 0.32f;
+                startLifetime = 1.05f; endLifetime = 0.68f;
+                startEmptyGap = 0.22f; endEmptyGap = 0.12f;
                 minWave = 2; maxWave = 3; doubleWaveChance = 0.78f;
                 rewardChance = 0.18f;
                 break;
             default:
-                startVisibleTime = 1.50f; endVisibleTime = 1.02f;
-                startGap = 0.86f; endGap = 0.56f;
+                startLifetime = 1.25f; endLifetime = 0.78f;
+                startEmptyGap = 0.30f; endEmptyGap = 0.18f;
                 minWave = 1; maxWave = 2; doubleWaveChance = 0.60f;
                 rewardChance = 0.20f;
                 break;
@@ -65,7 +65,7 @@ public class MoleSpawner : MonoBehaviour
         yield return new WaitForSeconds(0.35f);
         while (gameManager.IsRoundActive)
         {
-            activeMoles.RemoveAll(m => m == null || !m.IsVisible);
+            activeMoles.Clear();
             int desired = minWave;
             if (maxWave > minWave && Random.value < doubleWaveChance)
                 desired = Random.Range(minWave + 1, maxWave + 1);
@@ -82,12 +82,21 @@ public class MoleSpawner : MonoBehaviour
                 if (globalIndex >= 0) usedColumns.Add(globalIndex % 3);
                 available.RemoveAt(pick);
                 MoleType type = waveTypes[i];
-                float visible = Mathf.Lerp(startVisibleTime, endVisibleTime, gameManager.Progress01);
-                mole.Show(type, visible);
+                float lifetime = Mathf.Lerp(startLifetime, endLifetime, gameManager.Progress01);
+                mole.Show(type, lifetime);
                 activeMoles.Add(mole);
             }
-            float gap = Mathf.Lerp(startGap, endGap, gameManager.Progress01);
-            yield return new WaitForSeconds(Mathf.Lerp(startVisibleTime, endVisibleTime, gameManager.Progress01) + gap);
+
+            // 一批地鼠的生命周期与空场间隔完全分离。提前全部击中时，不再等待原定剩余寿命。
+            while (gameManager.IsRoundActive && activeMoles.Count > 0)
+            {
+                activeMoles.RemoveAll(m => m == null || !m.IsVisible);
+                if (activeMoles.Count > 0) yield return null;
+            }
+            if (!gameManager.IsRoundActive) break;
+
+            float emptyGap = Mathf.Lerp(startEmptyGap, endEmptyGap, gameManager.Progress01);
+            yield return new WaitForSeconds(emptyGap);
         }
         HideAll();
         spawnRoutine = null;

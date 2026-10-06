@@ -24,7 +24,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject startPanel;
     [SerializeField] private GameObject gameOverPanel;
 
-    private int score, combo, bestCombo, normalHits, rewardHits, bombHits;
+    private int score, combo, bestCombo, normalHits, rewardHits, bombHits, clickAttempts, correctHits;
+    private float bestMultiplier = 1f;
     private float timeLeft;
     private GameState state = GameState.Waiting;
     private GameDifficulty selectedDifficulty = GameDifficulty.Normal;
@@ -38,7 +39,7 @@ public class GameManager : MonoBehaviour
     public int Score => score;
     public int Combo => combo;
     public int BestCombo => bestCombo;
-    public float ComboMultiplier => combo >= 10 ? 3f : combo >= 6 ? 2f : combo >= 3 ? 1.5f : 1f;
+    public float ComboMultiplier => combo >= 10 ? 2f : combo >= 5 ? 1.5f : 1f;
     public float Progress01 => gameDuration <= 0f ? 1f : 1f - Mathf.Clamp01(timeLeft / gameDuration);
     public string DifficultyName => GetDifficultyName(selectedDifficulty);
 
@@ -84,7 +85,8 @@ public class GameManager : MonoBehaviour
         ResumeGame(true);
         selectedDifficulty = difficulty;
         spawner.SetDifficulty(difficulty);
-        score = combo = bestCombo = normalHits = rewardHits = bombHits = 0;
+        score = combo = bestCombo = normalHits = rewardHits = bombHits = clickAttempts = correctHits = 0;
+        bestMultiplier = 1f;
         timeLeft = gameDuration;
         state = GameState.Playing;
         startPanel.SetActive(false);
@@ -115,20 +117,27 @@ public class GameManager : MonoBehaviour
     public int RegisterMoleHit(MoleType type)
     {
         if (!IsPlaying) return 0;
+        clickAttempts++;
         int delta;
         if (type == MoleType.Bomb)
         {
             bombHits++;
             combo = 0;
             delta = -Mathf.Min(score, bombPenalty);
+            menu?.PulseComboBreak("误击炸弹鼠");
         }
         else
         {
+            float previousMultiplier = ComboMultiplier;
             combo++;
             bestCombo = Mathf.Max(bestCombo, combo);
+            correctHits++;
             if (type == MoleType.Reward) rewardHits++; else normalHits++;
             int baseScore = type == MoleType.Reward ? rewardScore : normalScore;
             delta = Mathf.RoundToInt(baseScore * ComboMultiplier);
+            bestMultiplier = Mathf.Max(bestMultiplier, ComboMultiplier);
+            if (ComboMultiplier > previousMultiplier)
+                menu?.PulseComboMilestone(combo, ComboMultiplier);
         }
         score = Mathf.Max(0, score + delta);
         if (audioManager != null) audioManager.PlayMoleSound(type);
@@ -138,9 +147,11 @@ public class GameManager : MonoBehaviour
 
     public void RegisterMiss()
     {
-        if (!IsPlaying || combo == 0) return;
+        if (!IsPlaying) return;
+        clickAttempts++;
+        if (combo == 0) return;
         combo = 0;
-        menu?.PulseComboBreak();
+        menu?.PulseComboBreak("点空了");
         UpdateHud();
     }
 
@@ -148,7 +159,7 @@ public class GameManager : MonoBehaviour
     {
         if (!IsPlaying || type == MoleType.Bomb || combo == 0) return;
         combo = 0;
-        menu?.PulseComboBreak();
+        menu?.PulseComboBreak("地鼠逃脱");
         UpdateHud();
     }
 
@@ -180,7 +191,9 @@ public class GameManager : MonoBehaviour
         spawner.StopSpawning();
         statusText.text = "挑战结束";
         finalScoreText.text = $"{DifficultyName}  ·  {score} 分";
-        menu?.SetFinalStats($"最高连击  {bestCombo}\n普通鼠 {normalHits}   奖励鼠 {rewardHits}   炸弹鼠 {bombHits}");
+        float accuracy = clickAttempts <= 0 ? 0f : correctHits * 100f / clickAttempts;
+        menu?.SetFinalStats($"最高连击  {bestCombo}     最高倍率  ×{bestMultiplier:0.#}\n命中率  {accuracy:0}%     普通鼠 {normalHits}  ·  奖励鼠 {rewardHits}  ·  炸弹鼠 {bombHits}");
+        if (uiTheme != null) uiTheme.ShowGameplayHud(false);
         gameOverPanel.SetActive(true);
         UpdateHud();
     }
